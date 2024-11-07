@@ -1,6 +1,6 @@
 # Compilateur et options
 CC=gcc
-CFLAGS=-Wall -Wextra -std=c99 -g
+CFLAGS=-Wall -Wextra -std=c99 
 
 # Répertoires
 SRC_DIR=src
@@ -17,8 +17,9 @@ LIB_SRC=$(wildcard $(SRC_DIR)/*.c)
 LIB_OBJ=$(LIB_SRC:$(SRC_DIR)/%.c=$(LIB_BUILD_DIR)/%.o)
 LIB=$(LIB_BUILD_DIR)/libthread.so
 
+TESTS = 01-main 02-switch 03-equity 11-join 12-join-main 21-create-many 22-create-many-recursive 23-create-many-once 31-switch-many 32-switch-many-join 33-switch-many-cascade 51-fibonacci 61-mutex 62-mutex 63-mutex-equity 64-mutex-join 71-preemption 81-deadlock 91-priority
 
-TEST_SRC=$(wildcard $(TEST_DIR)/*.c)
+TEST_SRC=$(addprefix $(TEST_DIR)/, $(addsuffix .c, $(TESTS)))
 TEST_OBJ=$(TEST_SRC:$(TEST_DIR)/%.c=$(TEST_BUILD_DIR)/%.o)
 
 PTHREAD_TEST_OBJ=$(TEST_SRC:$(TEST_DIR)/%.c=$(TEST_BUILD_DIR)/%-pthread.o)
@@ -26,7 +27,7 @@ TEST=$(TEST_OBJ:$(TEST_BUILD_DIR)/%.o=$(TEST_BUILD_DIR)/%)
 PTHREAD_TEST=$(PTHREAD_TEST_OBJ:$(TEST_BUILD_DIR)/%.o=$(TEST_BUILD_DIR)/%)
 
 # Règles
-all: lib tests
+all: lib libpr tests
 
 # Créer les répertoires de build s'ils n'existent pas
 $(shell mkdir -p $(TEST_BUILD_DIR) $(LIB_BUILD_DIR))
@@ -40,11 +41,25 @@ $(LIB_BUILD_DIR)/%.so: $(LIB_BUILD_DIR)/%.o
 $(LIB_BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) -o $@ $(CFLAGS) -fPIC -c $< 
 
+libpr: $(LIB_BUILD_DIR)/libthreadpr.so $(LIB_OBJ:.o=-pr.o)
+
+$(LIB_BUILD_DIR)/libthreadpr.so: $(LIB_BUILD_DIR)/libthread-pr.o
+	$(CC) -o $@ -shared -fPIC $^
+
+$(LIB_BUILD_DIR)/%-pr.o: $(SRC_DIR)/%.c
+	$(CC) -o $@ $(CFLAGS) -fPIC -c $< -DUSE_PREEMPTION 
+
 # Compiler les tests pour les threads. Chaque test est compilé dans son propre exécutable sans -DUSE_THREAD
 tests: $(TEST) $(TEST_OBJ)
 
-$(TEST_BUILD_DIR)/%: $(TEST_BUILD_DIR)/%.o $(LIB)
+$(TEST_BUILD_DIR)/%: $(TEST_BUILD_DIR)/%.o $(LIB) $(LIB_BUILD_DIR)/libthreadpr.so
 	$(CC) -o $@ $(CFLAGS) $< -L$(LIB_BUILD_DIR) -lthread -Wl,-rpath=$(INSTALL_LIB_DIR)
+
+$(TEST_BUILD_DIR)/71-preemption: $(TEST_BUILD_DIR)/71-preemption.o $(LIB_BUILD_DIR)/libthreadpr.so
+	$(CC) -o $@ $(CFLAGS) $< -L$(LIB_BUILD_DIR) -lthreadpr -Wl,-rpath=$(INSTALL_LIB_DIR)
+
+$(TEST_BUILD_DIR)/62-mutex: $(TEST_BUILD_DIR)/62-mutex.o $(LIB_BUILD_DIR)/libthreadpr.so
+	$(CC) -o $@ $(CFLAGS) $< -L$(LIB_BUILD_DIR) -lthreadpr -Wl,-rpath=$(INSTALL_LIB_DIR)
 
 $(TEST_BUILD_DIR)/%.o: $(TEST_DIR)/%.c
 	$(CC) -o $@ $(CFLAGS) -c $< -I $(SRC_DIR)
@@ -59,18 +74,22 @@ $(TEST_BUILD_DIR)/%-pthread.o: $(TEST_DIR)/%.c
 	$(CC) -o $@ $(CFLAGS) -DUSE_PTHREAD -I $(SRC_DIR) -c $< 
 
 # Installation des fichiers cibles dans le répertoire install
-install: $(LIB) $(TEST) $(PTHREAD_TEST)
+install: lib tests pthreads
 	cp $(LIB) $(INSTALL_LIB_DIR)
+	cp $(LIB_BUILD_DIR)/libthreadpr.so $(INSTALL_LIB_DIR)
 	cp $(TEST) $(INSTALL_BIN_DIR)
 	cp $(PTHREAD_TEST) $(INSTALL_BIN_DIR)
 
 # Exécution des tests
-check:
+check: install
 	./run_tests.sh
 
 # Valgrind
-valgrind:
-	./run_tests.sh --valgrind
+valgrind: install
+	./run_tests.sh -v
+
+graphs: install
+	./run_tests.sh -g
 
 # Suppression du répertoire build et des fichier installés
 clean:

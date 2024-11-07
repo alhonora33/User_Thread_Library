@@ -39,10 +39,26 @@ extern int thread_join(thread_t thread, void **retval);
  */
 extern void thread_exit(void *retval) __attribute__((__noreturn__));
 
+/* Obtenir la valeur de priorité du thread donné
+ * 
+ * La valeur de priorité va de 0 (pas prioritaire) à 39 (très prioritaire)
+ * La valeur de priorité par défaut est 20
+*/
+extern int thread_getpriority(thread_t thread);
+
+/* Modifier la valeur de priorité du thread donné
+ * 
+ * retourne 0 si l'exécution n'a levé aucune erreur
+ * 
+ * La valeur de priorité va de 0 (pas prioritaire) à 39 (très prioritaire)
+ * La valeur de priorité par défaut est 20
+*/
+extern int thread_setpriority(thread_t thread, int priority);
+
 /* Interface possible pour les mutex */
 typedef struct thread_mutex
 {
-    int dummy;
+    thread_t *owner;
 } thread_mutex_t;
 int thread_mutex_init(thread_mutex_t *mutex);
 int thread_mutex_destroy(thread_mutex_t *mutex);
@@ -61,12 +77,17 @@ int thread_mutex_unlock(thread_mutex_t *mutex);
 #define thread_join pthread_join
 #define thread_exit pthread_exit
 
+/* Système de priorités */
+#define thread_setpriority pthread_setschedprio
+#define thread_getpriority pthread_getschedprio
+
 /* Interface possible pour les mutex */
 #define thread_mutex_t pthread_mutex_t
 #define thread_mutex_init(_mutex) pthread_mutex_init(_mutex, NULL)
 #define thread_mutex_destroy pthread_mutex_destroy
 #define thread_mutex_lock pthread_mutex_lock
 #define thread_mutex_unlock pthread_mutex_unlock
+
 
 #endif /* USE_PTHREAD */
 
